@@ -5,10 +5,10 @@ import { Link } from "react-router-dom";
 
 const Hero = () => {
   const images: string[] = [
-    "/src/assets/img/minion.jpg",
-    "/src/assets/img/minion.jpg",
-    "/src/assets/img/minion.jpg",
-    "/src/assets/img/minion.jpg",
+    "/public/minion.jpg",
+    "/public/minion.jpg",
+    "/public/minion.jpg",
+    "/public/minion.jpg",
   ];
 
   return (
