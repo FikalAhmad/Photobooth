@@ -326,7 +326,7 @@ const PhotoStripGenerator = () => {
       <div className="flex flex-col gap-3">
         <div className="mb-4">
           <h2 className="text-2xl font-bold">Fotoboothgaksi</h2>
-          <span className="text-[1px]"> Created by KAL 🖤</span>
+          <span className="text-[1px]"> Created by Suka Kopi Manis ☕</span>
         </div>
         <div className="flex gap-5">
           <Button asChild>
