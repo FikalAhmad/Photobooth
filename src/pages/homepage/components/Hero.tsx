@@ -2,14 +2,10 @@ import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay } from "swiper/modules";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import minionImage from "/src/assets/img/minion.jpg";
 
 const Hero = () => {
-  const images: string[] = [
-    "/public/minion.jpg",
-    "/public/minion.jpg",
-    "/public/minion.jpg",
-    "/public/minion.jpg",
-  ];
+  const images: string[] = [minionImage, minionImage, minionImage, minionImage];
 
   return (
     <div className="flex flex-col items-center px-10 pt-30 gap-5 w-full scrollbar-hidden">
