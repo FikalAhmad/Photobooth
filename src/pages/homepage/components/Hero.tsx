@@ -2,10 +2,12 @@ import { Swiper, SwiperSlide } from "swiper/react";
 import { Autoplay } from "swiper/modules";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
-import minionImage from "/src/assets/img/minion.jpg";
+import cat from "/src/assets/img/cat.png";
+import iuv from "/src/assets/img/iuv.png";
+import ofd from "/src/assets/img/ofd.png";
 
 const Hero = () => {
-  const images: string[] = [minionImage, minionImage, minionImage, minionImage];
+  const images: string[] = [cat, iuv, ofd];
 
   return (
     <div className="flex flex-col items-center px-10 pt-30 gap-5 w-full scrollbar-hidden">
