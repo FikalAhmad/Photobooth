@@ -5,9 +5,10 @@ import { Link } from "react-router-dom";
 import cat from "/src/assets/img/cat.png";
 import iuv from "/src/assets/img/iuv.png";
 import ofd from "/src/assets/img/ofd.png";
+import vvz from "/src/assets/img/vvz.png";
 
 const Hero = () => {
-  const images: string[] = [cat, iuv, ofd];
+  const images: string[] = [cat, iuv, ofd, vvz];
 
   return (
     <div className="flex flex-col items-center px-10 pt-30 gap-5 w-full scrollbar-hidden">
