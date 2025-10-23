@@ -17,9 +17,9 @@ const Hero = () => {
           Take Photos, Choose a Theme, Get Your Photostrip Instantly!
         </div>
         <div className="text-maroon">
-          No apps, no hassle. Just open this sh*t, snap photos with your camera,
-          pick your favorite theme & colors, and your photostrip is ready to
-          save or print.
+          No apps, no hassle. Just open this website, snap photos with your
+          camera, pick your favorite theme & colors, and your photostrip is
+          ready to save or print.
         </div>
       </div>
       <Button className="bg-maroon" asChild>
