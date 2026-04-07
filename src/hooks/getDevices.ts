@@ -6,32 +6,47 @@ export function useCameraDevices() {
 
   // Handler untuk update daftar perangkat
   const handleDevices = useCallback((mediaDevices: MediaDeviceInfo[]) => {
-    setDevices(mediaDevices.filter((device) => device.kind === "videoinput"));
+    const videoDevices = mediaDevices.filter(
+      (device) => device.kind === "videoinput"
+    );
+
+    // Hindari duplikat deviceId (terutama yang string kosong) yang bisa bikin react crash jika jadi key
+    const uniqueDevices = videoDevices.reduce((acc, current) => {
+      const isDuplicate = acc.find((item) => item.deviceId === current.deviceId);
+      // Simpan hanya satu yang deviceId-nya kosong
+      if (current.deviceId === "") {
+        if (!acc.some(d => d.deviceId === "")) {
+          acc.push(current);
+        }
+      } else if (!isDuplicate) {
+        acc.push(current);
+      }
+      return acc;
+    }, [] as MediaDeviceInfo[]);
+
+    setDevices(uniqueDevices);
   }, []);
 
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadDevices() {
-      try {
-        const mediaDevices = await navigator.mediaDevices.enumerateDevices();
-        if (mounted) handleDevices(mediaDevices);
-      } catch (err) {
-        console.error("Gagal mengambil daftar kamera:", err);
-      }
+  const refreshDevices = useCallback(async () => {
+    try {
+      const mediaDevices = await navigator.mediaDevices.enumerateDevices();
+      handleDevices(mediaDevices);
+    } catch (err) {
+      console.error("Gagal mengambil daftar kamera:", err);
     }
+  }, [handleDevices]);
 
+  useEffect(() => {
     // Load pertama kali
-    loadDevices();
+    refreshDevices();
 
     // Update otomatis jika ada perubahan perangkat (misalnya colok/cabut kamera)
-    navigator.mediaDevices.addEventListener("devicechange", loadDevices);
+    navigator.mediaDevices.addEventListener("devicechange", refreshDevices);
 
     return () => {
-      mounted = false;
-      navigator.mediaDevices.removeEventListener("devicechange", loadDevices);
+      navigator.mediaDevices.removeEventListener("devicechange", refreshDevices);
     };
-  }, [handleDevices]);
+  }, [refreshDevices]);
 
   // Set default device (kamera pertama) jika belum ada yang dipilih
   useEffect(() => {
@@ -40,5 +55,5 @@ export function useCameraDevices() {
     }
   }, [devices, deviceId]);
 
-  return { devices, deviceId, setDeviceId };
+  return { devices, deviceId, setDeviceId, refreshDevices };
 }

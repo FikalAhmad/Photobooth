@@ -1,7 +1,15 @@
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { photostrip } from "@/lib/photostrip";
 import { CapturedImage, FilterSettings, Frame } from "@/types/global.types";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  DownloadIcon,
+  RotateCcwIcon,
+  PaletteIcon,
+  LayoutIcon,
+  SparklesIcon,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 const CANVAS_CONFIG = {
@@ -32,7 +40,6 @@ const getStoredImages = (): CapturedImage[] => {
   try {
     const dataImage = localStorage.getItem(STORAGE_KEY);
     if (!dataImage) return [];
-
     const parsed = JSON.parse(dataImage);
     return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
@@ -52,35 +59,28 @@ const applyFilters = (filters: FilterSettings): string => {
  * Load image with filters applied
  */
 const loadImageWithFilters = (
-  image: CapturedImage
+  image: CapturedImage,
 ): Promise<HTMLCanvasElement> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
-
     img.onload = () => {
       try {
         const tempCanvas = document.createElement("canvas");
         const tempCtx = tempCanvas.getContext("2d");
-
         if (!tempCtx) {
           reject(new Error("Canvas context not available"));
           return;
         }
-
         tempCanvas.width = img.width;
         tempCanvas.height = img.height;
-
-        // Apply filters
         tempCtx.filter = applyFilters(image.filters);
         tempCtx.drawImage(img, 0, 0);
-
         resolve(tempCanvas);
       } catch (error) {
         reject(error);
       }
     };
-
     img.onerror = () => reject(new Error(`Failed to load image: ${image.src}`));
     img.src = image.src;
   });
@@ -93,7 +93,6 @@ const loadTemplateImage = (src: string): Promise<HTMLImageElement> => {
   return new Promise((resolve, reject) => {
     const template = new Image();
     template.crossOrigin = "anonymous";
-
     template.onload = () => resolve(template);
     template.onerror = () =>
       reject(new Error(`Failed to load template: ${src}`));
@@ -102,124 +101,76 @@ const loadTemplateImage = (src: string): Promise<HTMLImageElement> => {
 };
 
 /**
- * Validate hex color format
- */
-const isValidHexColor = (color: string): boolean => {
-  return /^#[0-9A-F]{6}$/i.test(color);
-};
-
-/**
- * Get appropriate frame layout based on number of images
- */
-const getFrameLayout = (imageCount: number): Frame[] => {
-  // Return layout for exact count, or fallback to 3-photo layout
-  return FRAME_LAYOUTS[imageCount] || FRAME_LAYOUTS[3];
-};
-
-/**
  * Calculate dimensions for object-fit: cover behavior
- * Ensures image fills the frame while maintaining aspect ratio
  */
 const calculateCoverDimensions = (
   imgWidth: number,
   imgHeight: number,
   frameWidth: number,
-  frameHeight: number
+  frameHeight: number,
 ) => {
   const imgRatio = imgWidth / imgHeight;
   const frameRatio = frameWidth / frameHeight;
-
   let sourceWidth = imgWidth;
   let sourceHeight = imgHeight;
   let sourceX = 0;
   let sourceY = 0;
 
   if (imgRatio > frameRatio) {
-    // Image is wider than frame - crop sides
     sourceWidth = imgHeight * frameRatio;
     sourceX = (imgWidth - sourceWidth) / 2;
   } else {
-    // Image is taller than frame - crop top/bottom
     sourceHeight = imgWidth / frameRatio;
     sourceY = (imgHeight - sourceHeight) / 2;
   }
-
-  return {
-    sourceX,
-    sourceY,
-    sourceWidth,
-    sourceHeight,
-  };
+  return { sourceX, sourceY, sourceWidth, sourceHeight };
 };
 
 const PhotoStripGenerator = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
   const [images, setImages] = useState<CapturedImage[]>([]);
   const [pickstrip, setPickstrip] = useState<string>("");
-  const [bgColor, setBgColor] = useState<string | null>(null);
+  const [bgColor, setBgColor] = useState<string | null>("#ffffff");
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Load images from localStorage on mount
   useEffect(() => {
     const storedImages = getStoredImages();
     setImages(storedImages);
   }, []);
 
-  // Render canvas whenever dependencies change
   useEffect(() => {
     let isMounted = true;
-
     const renderCanvas = async () => {
       const canvas = canvasRef.current;
       if (!canvas) return;
-
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
-
       setError(null);
 
       try {
-        // Set canvas dimensions
         canvas.width = CANVAS_CONFIG.width;
         canvas.height = CANVAS_CONFIG.height;
+        const frames = FRAME_LAYOUTS[images.length] || FRAME_LAYOUTS[3];
 
-        // Get appropriate frame layout based on image count
-        const frames = getFrameLayout(images.length);
-
-        // Clear canvas
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // Draw background color if selected
         if (bgColor) {
           ctx.fillStyle = bgColor;
           ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
 
-        // Load all images with filters
         const imagePromises = images.map((image) =>
-          loadImageWithFilters(image)
+          loadImageWithFilters(image),
         );
-
         const results = await Promise.allSettled(imagePromises);
-
-        // Filter successful results
         const loadedImages = results
           .filter(
-            (result): result is PromiseFulfilledResult<HTMLCanvasElement> =>
-              result.status === "fulfilled"
+            (res): res is PromiseFulfilledResult<HTMLCanvasElement> =>
+              res.status === "fulfilled",
           )
-          .map((result) => result.value);
+          .map((res) => res.value);
 
-        // Log any failed images
-        results.forEach((result, index) => {
-          if (result.status === "rejected") {
-            console.error(`Failed to load image ${index}:`, result.reason);
-          }
-        });
-
-        // Draw images to their frames with object-fit: cover behavior
         loadedImages.forEach((imgCanvas, index) => {
           const frame = frames[index];
           if (frame) {
@@ -228,187 +179,248 @@ const PhotoStripGenerator = () => {
                 imgCanvas.width,
                 imgCanvas.height,
                 frame.width,
-                frame.height
+                frame.height,
               );
-
-            // Draw cropped image to fit frame (object-fit: cover)
             ctx.drawImage(
               imgCanvas,
-              sourceX, // source x (crop from here)
-              sourceY, // source y (crop from here)
-              sourceWidth, // source width (crop this much)
-              sourceHeight, // source height (crop this much)
-              frame.x, // destination x
-              frame.y, // destination y
-              frame.width, // destination width
-              frame.height // destination height
+              sourceX,
+              sourceY,
+              sourceWidth,
+              sourceHeight,
+              frame.x,
+              frame.y,
+              frame.width,
+              frame.height,
             );
           }
         });
 
-        // Draw template overlay if selected
         if (pickstrip) {
           const template = await loadTemplateImage(pickstrip);
           ctx.drawImage(template, 0, 0, canvas.width, canvas.height);
         }
 
-        // Set preview only if component is still mounted
-        if (isMounted) {
-          setPreview(canvas.toDataURL("image/png"));
-        }
+        if (isMounted) setPreview(canvas.toDataURL("image/png"));
       } catch (err) {
-        console.error("Error rendering canvas:", err);
-        if (isMounted) {
-          setError(
-            err instanceof Error ? err.message : "Failed to render canvas"
-          );
-        }
+        console.error(err);
+        if (isMounted) setError("Failed to render canvas");
       }
     };
-
     renderCanvas();
-
-    // Cleanup function
     return () => {
       isMounted = false;
     };
   }, [images, pickstrip, bgColor]);
 
-  // Handle background/template selection
-  const handlePickstrip = useCallback((background: string) => {
-    if (!background) {
-      console.warn("Empty background value provided");
-      return;
-    }
-
+  const handlePickstrip = (background: string) => {
     if (background.startsWith("#")) {
-      // Validate hex color
-      if (!isValidHexColor(background)) {
-        console.error("Invalid hex color format:", background);
-        setError("Invalid color format. Please use #RRGGBB format.");
-        return;
-      }
       setBgColor(background);
       setPickstrip("");
     } else {
       setPickstrip(background);
       setBgColor(null);
     }
+  };
 
-    setError(null);
-  }, []);
+  const downloadPhotoStrip = () => {
+    if (!preview) return;
+    const link = document.createElement("a");
+    link.href = preview;
+    link.download = `photostrip-${Date.now()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
-  // Download the photo strip
-  const downloadPhotoStrip = useCallback(() => {
-    if (!preview) {
-      console.warn("No preview available to download");
-      return;
-    }
+  if (error)
+    return <div className="text-center p-20 text-red-500">{error}</div>;
 
-    try {
-      const link = document.createElement("a");
-      link.href = preview;
-      link.download = `photostrip-${Date.now()}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (err) {
-      console.error("Failed to download photo strip:", err);
-      setError("Failed to download photo strip");
-    }
-  }, [preview]);
-
-  if (error) {
-    return error;
-  }
   return (
-    <div className="flex flex-col lg:flex-row justify-between gap-10 lg:gap-0 items-center md:items-stretch mx-10 md:mx-32 my-10">
-      <div className="flex flex-col gap-3">
-        <div className="mb-4">
-          <h2 className="text-2xl font-bold">Fotoboothgaksi</h2>
-          <span className="text-[1px]"> Created by Suka Kopi Manis ☕</span>
-        </div>
-        <div className="flex gap-5">
-          <Button asChild>
-            <Link to={"/capture"}>Retake</Link>
-          </Button>
-          <Button onClick={downloadPhotoStrip} className="bg-green-600">
-            Save your Photo
-          </Button>
-        </div>
-
-        <div>
-          <div className="text-sm">Color Background</div>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="rounded-md">
-              <input
-                type="color"
-                className="w-32 h-20 cursor-pointer rounded-md"
-                onChange={(e) => handlePickstrip(e.target.value)}
+    <div className="min-h-[calc(100vh-80px)] bg-gray-50 flex items-center justify-center p-4 md:p-8">
+      <div className="max-w-6xl w-full flex flex-col lg:flex-row gap-8 items-start">
+        {/* LEFTSIDE: PREVIEW AREA */}
+        <div className="w-full lg:w-[450px] flex-shrink-0 flex flex-col items-center gap-6">
+          <div className="relative group p-4 bg-white rounded-2xl shadow-xl overflow-hidden">
+            {preview ? (
+              <img
+                src={preview || "/placeholder.svg"}
+                alt="Photo Strip Preview"
+                className="w-full max-h-[85vh] object-contain rounded-lg transition-transform duration-500 group-hover:scale-[1.02]"
+                onContextMenu={(e) => e.preventDefault()}
+                onDragStart={(e) => e.preventDefault()}
               />
+            ) : (
+              <div className="w-[295px] h-[886px] animate-pulse bg-gray-100 flex items-center justify-center text-gray-400">
+                Generating Preview...
+              </div>
+            )}
+
+            {/* Action floating buttons for desktop hover? Optional... let's keep it clean */}
+          </div>
+
+          <div className="flex gap-4 w-full">
+            <Button
+              asChild
+              variant="outline"
+              className="flex-1 h-12 rounded-xl text-maroon border-maroon hover:bg-maroon/5"
+            >
+              <Link to="/capture" className="flex items-center gap-2">
+                <RotateCcwIcon size={20} /> Retake
+              </Link>
+            </Button>
+            <Button
+              onClick={downloadPhotoStrip}
+              className="flex-1 h-12 rounded-xl bg-maroon hover:bg-maroon/80 text-white shadow-lg"
+            >
+              <DownloadIcon size={20} className="mr-2" /> Download
+            </Button>
+          </div>
+        </div>
+
+        {/* RIGHTSIDE: CONTROLS */}
+        <div className="flex-1 w-full bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden flex flex-col">
+          <div className="p-6 border-b border-gray-100 bg-white">
+            <h2 className="text-2xl font-bold flex items-center gap-3 text-gray-800">
+              <SparklesIcon className="text-maroon" /> Customize Your Strip
+            </h2>
+            <p className="text-gray-500 text-sm mt-1">
+              Choose a theme or color to make it yours.
+            </p>
+          </div>
+
+          <Tabs defaultValue="themes" className="w-full">
+            <TabsList className="w-full grid grid-cols-2 bg-gray-50/50 p-2 h-auto rounded-none border-b border-gray-100">
+              <TabsTrigger
+                value="themes"
+                className="rounded-xl py-3 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              >
+                <LayoutIcon size={18} className="mr-2" /> Themes
+              </TabsTrigger>
+              <TabsTrigger
+                value="backdrop"
+                className="rounded-xl py-3 data-[state=active]:bg-white data-[state=active]:shadow-sm"
+              >
+                <PaletteIcon size={18} className="mr-2" /> Backdrop
+              </TabsTrigger>
+            </TabsList>
+
+            <div className="p-6 overflow-y-auto max-h-[600px]">
+              <TabsContent value="themes" className="mt-0 outline-none">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {photostrip
+                    .filter((item) =>
+                      images.length === 3
+                        ? !item.src.startsWith("/4-")
+                        : item.src.startsWith("/4-"),
+                    )
+                    .map((item, idx) => (
+                      <button
+                        key={`template-${idx}`}
+                        onClick={() => handlePickstrip(item.src)}
+                        className={`group relative aspect-[1/3] border-2 rounded-xl overflow-hidden transition-all hover:scale-105 ${
+                          pickstrip === item.src
+                            ? "border-orange-500 shadow-md ring-2 ring-orange-500/20"
+                            : "border-transparent hover:border-gray-200"
+                        }`}
+                      >
+                        <div
+                          className="absolute inset-0 bg-cover bg-center"
+                          style={{ backgroundImage: `url(${item.src})` }}
+                        />
+                        <div className="absolute inset-x-0 bottom-0 p-2 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <p className="text-[10px] text-white text-center font-medium truncate">
+                            {item.label}
+                          </p>
+                        </div>
+                        {pickstrip === item.src && (
+                          <div className="absolute top-2 right-2 bg-orange-500 text-white rounded-full p-1 border border-white">
+                            <SparklesIcon size={10} />
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                </div>
+              </TabsContent>
+
+              <TabsContent value="backdrop" className="mt-0 outline-none">
+                <div className="space-y-6">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-4 block">
+                      Pick a Color
+                    </label>
+                    <div className="grid grid-cols-5 gap-3">
+                      {[
+                        "#ffffff",
+                        "#000000",
+                        "#fef2f2",
+                        "#eff6ff",
+                        "#f0fdf4",
+                        "#fff7ed",
+                        "#faf5ff",
+                        "#fff1f2",
+                        "#82201f",
+                        "#1e293b",
+                        "#475569",
+                        "#dc2626",
+                        "#2563eb",
+                        "#16a34a",
+                        "#ca8a04",
+                      ].map((color) => (
+                        <button
+                          key={color}
+                          onClick={() => handlePickstrip(color)}
+                          className={`w-full aspect-square rounded-full border-2 transition-transform hover:scale-110 ${
+                            bgColor === color
+                              ? "border-orange-500 shadow-md ring-2 ring-orange-500/20"
+                              : "border-gray-200"
+                          }`}
+                          style={{ backgroundColor: color }}
+                        />
+                      ))}
+
+                      <div className="relative group w-full aspect-square rounded-full border-2 border-gray-200 overflow-hidden flex items-center justify-center bg-white hover:border-orange-500 transition-all">
+                        <PaletteIcon
+                          size={24}
+                          className="text-gray-400 group-hover:text-orange-500"
+                        />
+                        <input
+                          type="color"
+                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                          onChange={(e) => handlePickstrip(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100 mt-8">
+                    <p className="text-xs text-gray-500 flex items-center gap-2 italic">
+                      <SparklesIcon size={14} className="text-orange-400" />
+                      Pro tip: Using a solid backdrop color works best when you
+                      want to keep the focus on your photos.
+                    </p>
+                  </div>
+                </div>
+              </TabsContent>
             </div>
-          </div>
-        </div>
+          </Tabs>
 
-        <div>
-          <div className="text-sm my-3"></div>
-          <div className="grid grid-cols-3 gap-3">
-            {images.length === 3
-              ? photostrip
-                  .filter((item) => !item.src.startsWith("/4-"))
-                  .map((photo, idx) => {
-                    return (
-                      <Button
-                        key={`photostrip-${idx}`}
-                        onClick={() => handlePickstrip(photo.src)}
-                        className="h-20 hover:brightness-75"
-                        style={{
-                          backgroundImage: `url(${photo.src})`,
-                          backgroundSize: "cover",
-                          backgroundRepeat: "no-repeat",
-                          backgroundPosition: "bottom",
-                        }}
-                      >
-                        {photo.label}
-                      </Button>
-                    );
-                  })
-              : photostrip
-                  .filter((item) => item.src.startsWith("/4-"))
-                  .map((photo, idx) => {
-                    return (
-                      <Button
-                        key={`photostrip-${idx}`}
-                        onClick={() => handlePickstrip(photo.src)}
-                        className="h-20 hover:brightness-75"
-                        style={{
-                          backgroundImage: `url(${photo.src})`,
-                          backgroundSize: "cover",
-                          backgroundRepeat: "no-repeat",
-                          backgroundPosition: "bottom",
-                        }}
-                      >
-                        {photo.label}
-                      </Button>
-                    );
-                  })}
+          <div className="p-6 mt-auto bg-gray-50/50 border-t border-gray-100 flex items-center justify-between">
+            <div className="flex flex-col">
+              <span className="text-xs text-gray-400 font-medium uppercase tracking-wider">
+                Format
+              </span>
+              <span className="text-sm font-bold text-gray-600">
+                Premium PNG
+              </span>
+            </div>
+            <p className="text-xs text-gray-300 italic">
+              Fotoboothgaksi © 2026
+            </p>
           </div>
         </div>
       </div>
 
-      <div className="flex flex-col items-center text-center p-4 h-[750px] max-h-fit">
-        {preview && (
-          <img
-            src={preview}
-            alt="Photo Strip Preview"
-            className="shadow-2xl h-4/5"
-            onContextMenu={(e) => e.preventDefault()}
-            onDragStart={(e) => e.preventDefault()}
-          />
-        )}
-
-        <canvas ref={canvasRef} className="hidden"></canvas>
-      </div>
+      <canvas ref={canvasRef} className="hidden"></canvas>
     </div>
   );
 };
