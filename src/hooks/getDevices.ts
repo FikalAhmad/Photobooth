@@ -1,21 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
 
-export function useCameraDevices() {
+export const useCameraDevices = () => {
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [deviceId, setDeviceId] = useState<string>("");
 
   // Handler untuk update daftar perangkat
   const handleDevices = useCallback((mediaDevices: MediaDeviceInfo[]) => {
     const videoDevices = mediaDevices.filter(
-      (device) => device.kind === "videoinput"
+      (device) => device.kind === "videoinput",
     );
 
     // Hindari duplikat deviceId (terutama yang string kosong) yang bisa bikin react crash jika jadi key
     const uniqueDevices = videoDevices.reduce((acc, current) => {
-      const isDuplicate = acc.find((item) => item.deviceId === current.deviceId);
+      const isDuplicate = acc.find(
+        (item) => item.deviceId === current.deviceId,
+      );
       // Simpan hanya satu yang deviceId-nya kosong
       if (current.deviceId === "") {
-        if (!acc.some(d => d.deviceId === "")) {
+        if (!acc.some((d) => d.deviceId === "")) {
           acc.push(current);
         }
       } else if (!isDuplicate) {
@@ -44,7 +46,10 @@ export function useCameraDevices() {
     navigator.mediaDevices.addEventListener("devicechange", refreshDevices);
 
     return () => {
-      navigator.mediaDevices.removeEventListener("devicechange", refreshDevices);
+      navigator.mediaDevices.removeEventListener(
+        "devicechange",
+        refreshDevices,
+      );
     };
   }, [refreshDevices]);
 
@@ -56,4 +61,4 @@ export function useCameraDevices() {
   }, [devices, deviceId]);
 
   return { devices, deviceId, setDeviceId, refreshDevices };
-}
+};

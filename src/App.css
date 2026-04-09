@@ -3,11 +3,17 @@
 @font-face {
   font-family: "Plus Jakarta Sans";
   src: url("./assets/fonts/PlusJakartaSans.ttf");
+  font-weight: 400;
+  font-style: normal;
 }
 
 @plugin "tailwindcss-animate";
 
 @custom-variant dark (&:is(.dark *));
+
+@theme {
+  --font-display: "Plus Jakarta Sans", sans-serif;
+}
 
 :root {
   --background: oklch(1 0 0);
@@ -120,6 +126,9 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+* {
+  font-family: var(--font-display);
+}
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -127,10 +136,6 @@
   body {
     @apply bg-background text-foreground;
   }
-}
-
-html {
-  font-family: "Plus Jakarta Sans";
 }
 
 @utility scrollbar-hidden {

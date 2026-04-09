@@ -64,11 +64,17 @@ const Capture = () => {
       let countdown = count;
       setCountTicker(countdown);
 
-      const timer = setInterval(() => {
+      timerRef.current = setInterval(() => {
         countdown -= 1;
         setCountTicker(countdown);
 
         if (countdown === 0) {
+          // Selalu stop interval setelah 1 foto diambil
+          clearInterval(timerRef.current!);
+          timerRef.current = null;
+          setCounting(false);
+          setCountTicker(0);
+
           if (webcamRef.current) {
             const imageSrc = webcamRef.current.getScreenshot();
             if (imageSrc) {
@@ -82,17 +88,7 @@ const Capture = () => {
                   fitCamera,
                 },
               ]);
-              photoCountRef.current += 1;
             }
-          }
-
-          if (photoCountRef.current >= totalPhoto) {
-            clearInterval(timer);
-            setCounting(false);
-            setCountTicker(0);
-          } else {
-            countdown = count;
-            setCountTicker(countdown);
           }
         }
       }, 1000);
@@ -388,7 +384,7 @@ const Capture = () => {
           {/* SESSION INFO CARD */}
           <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 space-y-6">
             <div className="flex justify-between items-center">
-              <h3 className="font-black text-gray-800 tracking-tight text-xl">
+              <h3 className="text-gray-800 tracking-tight text-xl font-bold">
                 SESSION OPTIONS
               </h3>
             </div>

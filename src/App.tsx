@@ -11,7 +11,7 @@ const App = () => {
   };
   return (
     <Router>
-      <div className="min-h-screen bg-gray-100 font-sans">
+      <div className="min-h-screen bg-gray-100">
         <div className="">
           <Suspense
             fallback={

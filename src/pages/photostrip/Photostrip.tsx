@@ -1,217 +1,88 @@
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { photostrip } from "@/lib/photostrip";
-import { CapturedImage, FilterSettings, Frame } from "@/types/global.types";
 import {
   DownloadIcon,
-  RotateCcwIcon,
-  PaletteIcon,
   LayoutIcon,
+  PaletteIcon,
+  RotateCcwIcon,
+  SmileIcon,
   SparklesIcon,
+  TypeIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
-const CANVAS_CONFIG = {
-  width: 295,
-  height: 886,
-} as const;
+import { CANVAS_CONFIG, PREVIEW_WIDTH } from "./photostrip.constants";
+import { usePhotoStripCanvas } from "./hooks/usePhotoStripCanvas";
+import { useStickers } from "./hooks/useStickers";
+import { useTextItems } from "./hooks/useTextItems";
 
-const FRAME_LAYOUTS: Record<number, Frame[]> = {
-  3: [
-    { x: 20, y: 40, width: 255, height: 192 },
-    { x: 20, y: 286, width: 255, height: 192 },
-    { x: 21, y: 529, width: 255, height: 192 },
-  ],
-  4: [
-    { x: 20, y: 19, width: 255, height: 172 },
-    { x: 20, y: 211, width: 255, height: 172 },
-    { x: 20, y: 403, width: 255, height: 172 },
-    { x: 21, y: 595, width: 255, height: 172 },
-  ],
-};
+import DraggableOverlay from "./components/DraggableOverlay";
+import ThemesTab from "./components/ThemesTab";
+import BackdropTab from "./components/BackdropTab";
+import StickersTab from "./components/StickersTab";
+import TextTab from "./components/TextTab";
 
-const STORAGE_KEY = "images";
-
-/**
- * Safely parse JSON from localStorage
- */
-const getStoredImages = (): CapturedImage[] => {
-  try {
-    const dataImage = localStorage.getItem(STORAGE_KEY);
-    if (!dataImage) return [];
-    const parsed = JSON.parse(dataImage);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.error("Failed to parse stored images:", error);
-    return [];
-  }
-};
-
-/**
- * Apply CSS filters to canvas context
- */
-const applyFilters = (filters: FilterSettings): string => {
-  return `grayscale(${filters.grayscale}%) brightness(${filters.brightness}%) sepia(${filters.retroFilter}%) saturate(${filters.saturate}%) blur(${filters.softFilter}px)`;
-};
-
-/**
- * Load image with filters applied
- */
-const loadImageWithFilters = (
-  image: CapturedImage,
-): Promise<HTMLCanvasElement> => {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      try {
-        const tempCanvas = document.createElement("canvas");
-        const tempCtx = tempCanvas.getContext("2d");
-        if (!tempCtx) {
-          reject(new Error("Canvas context not available"));
-          return;
-        }
-        tempCanvas.width = img.width;
-        tempCanvas.height = img.height;
-        tempCtx.filter = applyFilters(image.filters);
-        tempCtx.drawImage(img, 0, 0);
-        resolve(tempCanvas);
-      } catch (error) {
-        reject(error);
-      }
-    };
-    img.onerror = () => reject(new Error(`Failed to load image: ${image.src}`));
-    img.src = image.src;
-  });
-};
-
-/**
- * Load template/overlay image
- */
-const loadTemplateImage = (src: string): Promise<HTMLImageElement> => {
-  return new Promise((resolve, reject) => {
-    const template = new Image();
-    template.crossOrigin = "anonymous";
-    template.onload = () => resolve(template);
-    template.onerror = () =>
-      reject(new Error(`Failed to load template: ${src}`));
-    template.src = src;
-  });
-};
-
-/**
- * Calculate dimensions for object-fit: cover behavior
- */
-const calculateCoverDimensions = (
-  imgWidth: number,
-  imgHeight: number,
-  frameWidth: number,
-  frameHeight: number,
-) => {
-  const imgRatio = imgWidth / imgHeight;
-  const frameRatio = frameWidth / frameHeight;
-  let sourceWidth = imgWidth;
-  let sourceHeight = imgHeight;
-  let sourceX = 0;
-  let sourceY = 0;
-
-  if (imgRatio > frameRatio) {
-    sourceWidth = imgHeight * frameRatio;
-    sourceX = (imgWidth - sourceWidth) / 2;
-  } else {
-    sourceHeight = imgWidth / frameRatio;
-    sourceY = (imgHeight - sourceHeight) / 2;
-  }
-  return { sourceX, sourceY, sourceWidth, sourceHeight };
-};
+const TABS = [
+  { value: "themes", icon: <LayoutIcon size={15} />, label: "Themes" },
+  { value: "backdrop", icon: <PaletteIcon size={15} />, label: "Color" },
+  // { value: "stickers", icon: <SmileIcon size={15} />, label: "Stickers" },
+  // { value: "text", icon: <TypeIcon size={15} />, label: "Text" },
+];
 
 const PhotoStripGenerator = () => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [images, setImages] = useState<CapturedImage[]>([]);
-  const [pickstrip, setPickstrip] = useState<string>("");
+  const previewContainerRef = useRef<HTMLDivElement>(null);
+
+  // ── Backdrop / theme state ──
+  const [pickstrip, setPickstrip] = useState("");
   const [bgColor, setBgColor] = useState<string | null>("#ffffff");
-  const [preview, setPreview] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("themes");
 
-  useEffect(() => {
-    const storedImages = getStoredImages();
-    setImages(storedImages);
-  }, []);
+  // ── Stickers ──
+  const {
+    stickers,
+    stickerSize,
+    setStickerSize,
+    addSticker,
+    moveSticker,
+    deleteSticker,
+    updateStickerSize,
+    updateStickerRotation,
+  } = useStickers();
 
-  useEffect(() => {
-    let isMounted = true;
-    const renderCanvas = async () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      setError(null);
+  // ── Text items ──
+  const {
+    texts,
+    form,
+    editingTextId,
+    setTextInput,
+    setTextColor,
+    setTextSize,
+    setTextFont,
+    setTextBold,
+    addText,
+    startEditText,
+    commitTextEdit,
+    cancelTextEdit,
+    moveText,
+    deleteText,
+    updateTextRotation,
+  } = useTextItems();
 
-      try {
-        canvas.width = CANVAS_CONFIG.width;
-        canvas.height = CANVAS_CONFIG.height;
-        const frames = FRAME_LAYOUTS[images.length] || FRAME_LAYOUTS[3];
+  // ── Sticker emoji category ──
+  const [emojiCategoryState, setEmojiCategoryState] = useState("Love 💕");
 
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // ── Unified selection ──
+  const [selectedId, setSelectedId] = useState<string | null>(null);
 
-        if (bgColor) {
-          ctx.fillStyle = bgColor;
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
+  const selectItem = useCallback((id: string) => setSelectedId(id), []);
+  const clearSelection = () => setSelectedId(null);
 
-        const imagePromises = images.map((image) =>
-          loadImageWithFilters(image),
-        );
-        const results = await Promise.allSettled(imagePromises);
-        const loadedImages = results
-          .filter(
-            (res): res is PromiseFulfilledResult<HTMLCanvasElement> =>
-              res.status === "fulfilled",
-          )
-          .map((res) => res.value);
+  // ── Canvas rendering ──
+  const { canvasRef, images, preview, isRendering, error, downloadPhotoStrip } =
+    usePhotoStripCanvas({ pickstrip, bgColor, stickers, texts });
 
-        loadedImages.forEach((imgCanvas, index) => {
-          const frame = frames[index];
-          if (frame) {
-            const { sourceX, sourceY, sourceWidth, sourceHeight } =
-              calculateCoverDimensions(
-                imgCanvas.width,
-                imgCanvas.height,
-                frame.width,
-                frame.height,
-              );
-            ctx.drawImage(
-              imgCanvas,
-              sourceX,
-              sourceY,
-              sourceWidth,
-              sourceHeight,
-              frame.x,
-              frame.y,
-              frame.width,
-              frame.height,
-            );
-          }
-        });
-
-        if (pickstrip) {
-          const template = await loadTemplateImage(pickstrip);
-          ctx.drawImage(template, 0, 0, canvas.width, canvas.height);
-        }
-
-        if (isMounted) setPreview(canvas.toDataURL("image/png"));
-      } catch (err) {
-        console.error(err);
-        if (isMounted) setError("Failed to render canvas");
-      }
-    };
-    renderCanvas();
-    return () => {
-      isMounted = false;
-    };
-  }, [images, pickstrip, bgColor]);
-
+  // ── Backdrop helpers ──
   const handlePickstrip = (background: string) => {
     if (background.startsWith("#")) {
       setBgColor(background);
@@ -222,205 +93,337 @@ const PhotoStripGenerator = () => {
     }
   };
 
-  const downloadPhotoStrip = () => {
-    if (!preview) return;
-    const link = document.createElement("a");
-    link.href = preview;
-    link.download = `photostrip-${Date.now()}.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // ── Unified move (works for both stickers and texts) ──
+  const moveItem = useCallback(
+    (id: string, x: number, y: number) => {
+      moveSticker(id, x, y);
+      moveText(id, x, y);
+    },
+    [moveSticker, moveText],
+  );
+
+  // ── Delete by id (sticker or text) ──
+  const deleteItem = useCallback(
+    (id: string) => {
+      deleteSticker(id);
+      deleteText(id);
+      setSelectedId((prev) => (prev === id ? null : prev));
+    },
+    [deleteSticker, deleteText],
+  );
+
+  // ── Add sticker & auto-select ──
+  const handleAddSticker = (emoji: string) => {
+    const id = addSticker(emoji);
+    setSelectedId(id);
+  };
+
+  // ── Add text & auto-select ──
+  const handleAddText = () => {
+    const id = addText();
+    if (id) setSelectedId(id);
+  };
+
+  // ── Start edit text & sync selection ──
+  const handleStartEditText = (id: string) => {
+    startEditText(id);
+    setSelectedId(id);
   };
 
   if (error)
     return <div className="text-center p-20 text-red-500">{error}</div>;
 
   return (
-    <div className="min-h-[calc(100vh-80px)] bg-gray-50 flex items-center justify-center p-4 md:p-8">
+    <div
+      className="min-h-[calc(100vh-80px)] flex items-center justify-center p-4 md:p-8"
+      style={{
+        background:
+          "linear-gradient(135deg, #fdf4f4 0%, #f9f0ff 50%, #f0f4ff 100%)",
+      }}
+      onClick={clearSelection}
+    >
       <div className="max-w-6xl w-full flex flex-col lg:flex-row gap-8 items-start">
-        {/* LEFTSIDE: PREVIEW AREA */}
-        <div className="w-full lg:w-[450px] flex-shrink-0 flex flex-col items-center gap-6">
-          <div className="relative group p-4 bg-white rounded-2xl shadow-xl overflow-hidden">
+        {/* ════════════  LEFT: PREVIEW  ════════════ */}
+        <div className="w-full lg:w-auto flex-shrink-0 flex flex-col items-center gap-4">
+          {/* Status indicator */}
+          <div className="flex items-center gap-2">
+            <div
+              className={`w-2 h-2 rounded-full ${isRendering ? "bg-amber-400 animate-pulse" : "bg-emerald-400"}`}
+            />
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              {isRendering ? "Rendering…" : "Live Preview"}
+            </span>
+          </div>
+
+          {/* Preview + draggable overlays */}
+          <div
+            ref={previewContainerRef}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: "relative",
+              width: "fit-content",
+              boxShadow:
+                "0 25px 50px -12px rgba(130,32,31,0.25), 0 0 0 1px rgba(0,0,0,0.04)",
+              borderRadius: 16,
+              overflow: "hidden",
+              background: bgColor || "transparent",
+            }}
+          >
             {preview ? (
               <img
-                src={preview || "/placeholder.svg"}
+                src={preview}
                 alt="Photo Strip Preview"
-                className="w-full max-h-[85vh] object-contain rounded-lg transition-transform duration-500 group-hover:scale-[1.02]"
+                style={{
+                  display: "block",
+                  width: PREVIEW_WIDTH,
+                  height: "auto",
+                }}
                 onContextMenu={(e) => e.preventDefault()}
                 onDragStart={(e) => e.preventDefault()}
               />
             ) : (
-              <div className="w-[295px] h-[886px] animate-pulse bg-gray-100 flex items-center justify-center text-gray-400">
-                Generating Preview...
+              <div
+                style={{
+                  width: PREVIEW_WIDTH,
+                  height: 720,
+                  background: "#f3f4f6",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#9ca3af",
+                  fontSize: 14,
+                }}
+              >
+                Generating…
               </div>
             )}
 
-            {/* Action floating buttons for desktop hover? Optional... let's keep it clean */}
+            {/* Sticker overlays */}
+            {stickers.map((s) => (
+              <DraggableOverlay
+                key={s.id}
+                id={s.id}
+                x={s.x}
+                y={s.y}
+                selected={selectedId === s.id}
+                containerRef={previewContainerRef}
+                onMove={moveItem}
+                onDelete={deleteItem}
+                onSelect={(id) => {
+                  selectItem(id);
+                  cancelTextEdit();
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: `${(s.size / CANVAS_CONFIG.width) * PREVIEW_WIDTH}px`,
+                    display: "block",
+                    transform: `rotate(${s.rotation}deg)`,
+                    filter:
+                      selectedId === s.id
+                        ? "drop-shadow(0 0 6px rgba(130,32,31,0.8))"
+                        : "none",
+                    lineHeight: 1,
+                  }}
+                >
+                  {s.emoji}
+                </span>
+              </DraggableOverlay>
+            ))}
+
+            {/* Text overlays */}
+            {texts.map((t) => (
+              <DraggableOverlay
+                key={t.id}
+                id={t.id}
+                x={t.x}
+                y={t.y}
+                selected={selectedId === t.id}
+                containerRef={previewContainerRef}
+                onMove={moveItem}
+                onDelete={deleteItem}
+                onSelect={(id) => {
+                  selectItem(id);
+                  cancelTextEdit();
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: `${(t.size / CANVAS_CONFIG.width) * PREVIEW_WIDTH}px`,
+                    fontFamily: t.fontFamily,
+                    fontWeight: t.bold ? "bold" : "normal",
+                    color: t.color,
+                    whiteSpace: "nowrap",
+                    display: "block",
+                    transform: `rotate(${t.rotation}deg)`,
+                    textShadow: "0 1px 3px rgba(0,0,0,0.4)",
+                    filter:
+                      selectedId === t.id
+                        ? "drop-shadow(0 0 6px rgba(130,32,31,0.8))"
+                        : "none",
+                  }}
+                  onDoubleClick={() => handleStartEditText(t.id)}
+                >
+                  {t.text}
+                </span>
+              </DraggableOverlay>
+            ))}
           </div>
 
-          <div className="flex gap-4 w-full">
+          {/* Action buttons */}
+          <div
+            className="flex gap-3 w-full"
+            style={{ maxWidth: PREVIEW_WIDTH }}
+          >
             <Button
               asChild
               variant="outline"
-              className="flex-1 h-12 rounded-xl text-maroon border-maroon hover:bg-maroon/5"
+              className="flex-1 h-11 rounded-xl border-maroon/40 text-maroon hover:bg-maroon/5 text-sm"
             >
               <Link to="/capture" className="flex items-center gap-2">
-                <RotateCcwIcon size={20} /> Retake
+                <RotateCcwIcon size={16} /> Retake
               </Link>
             </Button>
             <Button
               onClick={downloadPhotoStrip}
-              className="flex-1 h-12 rounded-xl bg-maroon hover:bg-maroon/80 text-white shadow-lg"
+              disabled={!preview || isRendering}
+              className="flex-1 h-11 rounded-xl bg-maroon hover:bg-maroon/80 text-white shadow-lg text-sm"
             >
-              <DownloadIcon size={20} className="mr-2" /> Download
+              <DownloadIcon size={16} className="mr-1" /> Save
             </Button>
           </div>
         </div>
 
-        {/* RIGHTSIDE: CONTROLS */}
-        <div className="flex-1 w-full bg-white rounded-3xl shadow-lg border border-gray-100 overflow-hidden flex flex-col">
-          <div className="p-6 border-b border-gray-100 bg-white">
-            <h2 className="text-2xl font-bold flex items-center gap-3 text-gray-800">
-              <SparklesIcon className="text-maroon" /> Customize Your Strip
+        {/* ════════════  RIGHT: CONTROLS  ════════════ */}
+        <div
+          className="flex-1 w-full rounded-3xl border border-gray-100 overflow-hidden flex flex-col"
+          style={{
+            background: "rgba(255,255,255,0.85)",
+            backdropFilter: "blur(20px)",
+            boxShadow:
+              "0 8px 32px rgba(130,32,31,0.08), 0 0 0 1px rgba(130,32,31,0.04)",
+          }}
+        >
+          {/* Header */}
+          <div className="p-5 border-b border-gray-100">
+            <h2 className="text-xl font-bold flex items-center gap-2 text-gray-800">
+              <SparklesIcon size={20} className="text-maroon" />
+              Canvas Editor
             </h2>
-            <p className="text-gray-500 text-sm mt-1">
-              Choose a theme or color to make it yours.
+            <p className="text-gray-400 text-xs mt-0.5">
+              Customize themes, colors, stickers &amp; text
             </p>
           </div>
 
-          <Tabs defaultValue="themes" className="w-full">
-            <TabsList className="w-full grid grid-cols-2 bg-gray-50/50 p-2 h-auto rounded-none border-b border-gray-100">
-              <TabsTrigger
-                value="themes"
-                className="rounded-xl py-3 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-              >
-                <LayoutIcon size={18} className="mr-2" /> Themes
-              </TabsTrigger>
-              <TabsTrigger
-                value="backdrop"
-                className="rounded-xl py-3 data-[state=active]:bg-white data-[state=active]:shadow-sm"
-              >
-                <PaletteIcon size={18} className="mr-2" /> Backdrop
-              </TabsTrigger>
+          {/* Tabs */}
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="flex-1 flex flex-col overflow-hidden"
+          >
+            <TabsList className="grid grid-cols-4 bg-gray-50/70 p-1.5 h-auto rounded-none border-b border-gray-100 gap-1">
+              {TABS.map((tab) => (
+                <TabsTrigger
+                  key={tab.value}
+                  value={tab.value}
+                  className="rounded-lg py-2 text-xs flex items-center gap-1.5 data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-maroon font-medium"
+                >
+                  {tab.icon} {tab.label}
+                </TabsTrigger>
+              ))}
             </TabsList>
 
-            <div className="p-6 overflow-y-auto max-h-[600px]">
+            <div
+              className="overflow-y-auto flex-1 p-5"
+              style={{ maxHeight: "calc(100vh - 340px)" }}
+            >
               <TabsContent value="themes" className="mt-0 outline-none">
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  {photostrip
-                    .filter((item) =>
-                      images.length === 3
-                        ? !item.src.startsWith("/4-")
-                        : item.src.startsWith("/4-"),
-                    )
-                    .map((item, idx) => (
-                      <button
-                        key={`template-${idx}`}
-                        onClick={() => handlePickstrip(item.src)}
-                        className={`group relative aspect-[1/3] border-2 rounded-xl overflow-hidden transition-all hover:scale-105 ${
-                          pickstrip === item.src
-                            ? "border-orange-500 shadow-md ring-2 ring-orange-500/20"
-                            : "border-transparent hover:border-gray-200"
-                        }`}
-                      >
-                        <div
-                          className="absolute inset-0 bg-cover bg-center"
-                          style={{ backgroundImage: `url(${item.src})` }}
-                        />
-                        <div className="absolute inset-x-0 bottom-0 p-2 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <p className="text-[10px] text-white text-center font-medium truncate">
-                            {item.label}
-                          </p>
-                        </div>
-                        {pickstrip === item.src && (
-                          <div className="absolute top-2 right-2 bg-orange-500 text-white rounded-full p-1 border border-white">
-                            <SparklesIcon size={10} />
-                          </div>
-                        )}
-                      </button>
-                    ))}
-                </div>
+                <ThemesTab
+                  images={images}
+                  pickstrip={pickstrip}
+                  onSelectTheme={handlePickstrip}
+                  onClearTheme={() => {
+                    setPickstrip("");
+                    setBgColor("#ffffff");
+                  }}
+                />
               </TabsContent>
 
               <TabsContent value="backdrop" className="mt-0 outline-none">
-                <div className="space-y-6">
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700 mb-4 block">
-                      Pick a Color
-                    </label>
-                    <div className="grid grid-cols-5 gap-3">
-                      {[
-                        "#ffffff",
-                        "#000000",
-                        "#fef2f2",
-                        "#eff6ff",
-                        "#f0fdf4",
-                        "#fff7ed",
-                        "#faf5ff",
-                        "#fff1f2",
-                        "#82201f",
-                        "#1e293b",
-                        "#475569",
-                        "#dc2626",
-                        "#2563eb",
-                        "#16a34a",
-                        "#ca8a04",
-                      ].map((color) => (
-                        <button
-                          key={color}
-                          onClick={() => handlePickstrip(color)}
-                          className={`w-full aspect-square rounded-full border-2 transition-transform hover:scale-110 ${
-                            bgColor === color
-                              ? "border-orange-500 shadow-md ring-2 ring-orange-500/20"
-                              : "border-gray-200"
-                          }`}
-                          style={{ backgroundColor: color }}
-                        />
-                      ))}
+                <BackdropTab
+                  bgColor={bgColor}
+                  onSelectColor={handlePickstrip}
+                />
+              </TabsContent>
 
-                      <div className="relative group w-full aspect-square rounded-full border-2 border-gray-200 overflow-hidden flex items-center justify-center bg-white hover:border-orange-500 transition-all">
-                        <PaletteIcon
-                          size={24}
-                          className="text-gray-400 group-hover:text-orange-500"
-                        />
-                        <input
-                          type="color"
-                          className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                          onChange={(e) => handlePickstrip(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                  </div>
+              <TabsContent value="stickers" className="mt-0 outline-none">
+                <StickersTab
+                  stickers={stickers}
+                  stickerSize={stickerSize}
+                  selectedId={selectedId}
+                  emojiCategory={emojiCategoryState}
+                  onCategoryChange={setEmojiCategoryState}
+                  onAddSticker={handleAddSticker}
+                  onSelectSticker={selectItem}
+                  onDeleteSticker={deleteItem}
+                  onSizeChange={(id, size) => {
+                    updateStickerSize(id, size);
+                    setStickerSize(size);
+                  }}
+                  onRotationChange={updateStickerRotation}
+                />
+              </TabsContent>
 
-                  <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100 mt-8">
-                    <p className="text-xs text-gray-500 flex items-center gap-2 italic">
-                      <SparklesIcon size={14} className="text-orange-400" />
-                      Pro tip: Using a solid backdrop color works best when you
-                      want to keep the focus on your photos.
-                    </p>
-                  </div>
-                </div>
+              <TabsContent value="text" className="mt-0 outline-none">
+                <TextTab
+                  texts={texts}
+                  selectedId={selectedId}
+                  editingTextId={editingTextId}
+                  textInput={form.textInput}
+                  textColor={form.textColor}
+                  textSize={form.textSize}
+                  textFont={form.textFont}
+                  textBold={form.textBold}
+                  onTextInputChange={setTextInput}
+                  onColorChange={setTextColor}
+                  onSizeChange={setTextSize}
+                  onFontChange={setTextFont}
+                  onBoldToggle={setTextBold}
+                  onAddText={handleAddText}
+                  onCommitEdit={commitTextEdit}
+                  onCancelEdit={cancelTextEdit}
+                  onStartEdit={handleStartEditText}
+                  onSelectText={selectItem}
+                  onDeleteText={deleteItem}
+                  onRotationChange={updateTextRotation}
+                />
               </TabsContent>
             </div>
           </Tabs>
 
-          <div className="p-6 mt-auto bg-gray-50/50 border-t border-gray-100 flex items-center justify-between">
-            <div className="flex flex-col">
-              <span className="text-xs text-gray-400 font-medium uppercase tracking-wider">
-                Format
-              </span>
-              <span className="text-sm font-bold text-gray-600">
-                Premium PNG
-              </span>
+          {/* Footer */}
+          <div className="px-5 py-3 border-t border-gray-100 bg-gray-50/50 flex items-center justify-between">
+            <div className="flex gap-2 items-center">
+              {stickers.length > 0 && (
+                <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-semibold">
+                  {stickers.length} sticker{stickers.length > 1 ? "s" : ""}
+                </span>
+              )}
+              {texts.length > 0 && (
+                <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-semibold">
+                  {texts.length} text{texts.length > 1 ? "s" : ""}
+                </span>
+              )}
             </div>
-            <p className="text-xs text-gray-300 italic">
+            <p className="text-[10px] text-gray-300 italic">
               Fotoboothgaksi © 2026
             </p>
           </div>
         </div>
       </div>
 
-      <canvas ref={canvasRef} className="hidden"></canvas>
+      {/* Hidden canvas for final render */}
+      <canvas ref={canvasRef} className="hidden" />
     </div>
   );
 };
