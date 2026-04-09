@@ -5,9 +5,7 @@ import {
   LayoutIcon,
   PaletteIcon,
   RotateCcwIcon,
-  SmileIcon,
   SparklesIcon,
-  TypeIcon,
 } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { Link } from "react-router-dom";
