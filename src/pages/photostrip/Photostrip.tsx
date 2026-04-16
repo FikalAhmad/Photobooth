@@ -319,7 +319,7 @@ const PhotoStripGenerator = () => {
             onValueChange={setActiveTab}
             className="flex-1 flex flex-col overflow-hidden"
           >
-            <TabsList className="grid grid-cols-4 bg-gray-50/70 p-1.5 h-auto rounded-none border-b border-gray-100 gap-1">
+            <TabsList className="grid grid-cols-4 bg-gray-50/70 p-1.5 h-auto rounded-none border-b border-gray-100 gap-1 w-full">
               {TABS.map((tab) => (
                 <TabsTrigger
                   key={tab.value}

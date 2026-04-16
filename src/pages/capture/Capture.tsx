@@ -196,7 +196,7 @@ const Capture = () => {
               <div className="bg-maroon/10 p-2 rounded-xl">
                 <CameraIcon className="text-maroon" size={20} />
               </div>
-              <Select onValueChange={(value) => setDeviceId(value)}>
+              <Select value={deviceId || undefined} onValueChange={(value) => setDeviceId(value)}>
                 <SelectTrigger className="w-56 border-none bg-gray-50 focus:ring-0">
                   <SelectValue
                     placeholder={devices[0]?.label || "Select Camera"}
@@ -206,11 +206,16 @@ const Capture = () => {
                 <SelectContent className="rounded-xl shadow-xl">
                   <SelectGroup>
                     <SelectLabel>Available Cameras</SelectLabel>
-                    {devices?.map((device) => (
-                      <SelectItem key={device.deviceId} value={device.deviceId}>
-                        {device.label}
-                      </SelectItem>
-                    ))}
+                    {devices
+                      ?.filter((d) => d.deviceId)
+                      .map((device) => (
+                        <SelectItem
+                          key={device.deviceId}
+                          value={device.deviceId}
+                        >
+                          {device.label || "Unknown Camera"}
+                        </SelectItem>
+                      ))}
                   </SelectGroup>
                 </SelectContent>
               </Select>

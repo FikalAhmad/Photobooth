@@ -42,10 +42,17 @@ export const useCameraDevices = () => {
     // Load pertama kali
     refreshDevices();
 
+    // Polling setiap 1.5 detik. Terkadang resolusi permission di browser lambat,
+    // atau event devicechange tidak langsung ter-trigger setelah onUserMedia.
+    const pollInterval = setInterval(() => {
+      refreshDevices();
+    }, 1500);
+
     // Update otomatis jika ada perubahan perangkat (misalnya colok/cabut kamera)
     navigator.mediaDevices.addEventListener("devicechange", refreshDevices);
 
     return () => {
+      clearInterval(pollInterval);
       navigator.mediaDevices.removeEventListener(
         "devicechange",
         refreshDevices,

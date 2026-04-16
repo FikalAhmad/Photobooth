@@ -4,8 +4,16 @@ export const photostrip = [
     src: "/photostrip1.png",
   },
   {
+    label: "Cat Theme",
+    src: "/photostrip5.png",
+  },
+  {
     label: "Autumn Theme",
     src: "/photostrip2.png",
+  },
+  {
+    label: "Figure Theme",
+    src: "/photostrip6.png",
   },
   {
     label: "Korean Theme",
@@ -16,11 +24,11 @@ export const photostrip = [
     src: "/photostrip4.png",
   },
   {
-    label: "Cat Theme",
-    src: "/photostrip5.png",
-  },
-  {
     label: "Astro Theme",
     src: "/4-photostrip1.png",
+  },
+  {
+    label: "Party Theme",
+    src: "/4-photostrip2.png",
   },
 ];
