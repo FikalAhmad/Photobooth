@@ -29,9 +29,7 @@ import {
   SunIcon,
   CameraIcon,
   TimerIcon,
-  Settings2Icon,
   Trash2Icon,
-  ChevronRightIcon,
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -45,6 +43,12 @@ const Capture = () => {
   const [counting, setCounting] = useState<boolean>(false);
   const [countTicker, setCountTicker] = useState<number>(0);
   const [isCameraReady, setIsCameraReady] = useState<boolean>(false);
+  const [flash, setFlash] = useState<boolean>(false);
+
+  const triggerFlash = () => {
+    setFlash(true);
+    setTimeout(() => setFlash(false), 200);
+  };
 
   const { devices, deviceId, setDeviceId, refreshDevices } = useCameraDevices();
 
@@ -76,6 +80,7 @@ const Capture = () => {
           setCountTicker(0);
 
           if (webcamRef.current) {
+            triggerFlash();
             const imageSrc = webcamRef.current.getScreenshot();
             if (imageSrc) {
               const { fitCamera, mirrored, ...filters } = cameraSetting;
@@ -94,6 +99,7 @@ const Capture = () => {
       }, 1000);
     } else {
       if (webcamRef.current) {
+        triggerFlash();
         const imageSrc = webcamRef.current.getScreenshot();
         if (imageSrc) {
           const { fitCamera, mirrored, ...filters } = cameraSetting;
@@ -133,6 +139,7 @@ const Capture = () => {
 
       if (countdown === 0) {
         if (webcamRef.current) {
+          triggerFlash();
           const imageSrc = webcamRef.current.getScreenshot();
           if (imageSrc) {
             photoCountRef.current += 1;
@@ -196,7 +203,10 @@ const Capture = () => {
               <div className="bg-maroon/10 p-2 rounded-xl">
                 <CameraIcon className="text-maroon" size={20} />
               </div>
-              <Select value={deviceId || undefined} onValueChange={(value) => setDeviceId(value)}>
+              <Select
+                value={deviceId || undefined}
+                onValueChange={(value) => setDeviceId(value)}
+              >
                 <SelectTrigger className="w-56 border-none bg-gray-50 focus:ring-0">
                   <SelectValue
                     placeholder={devices[0]?.label || "Select Camera"}
@@ -289,6 +299,13 @@ const Capture = () => {
             />
 
             {/* OVERLAYS */}
+            <div 
+              className={cn(
+                "absolute inset-0 bg-white z-[60] pointer-events-none transition-opacity duration-150",
+                flash ? "opacity-100" : "opacity-0"
+              )} 
+            />
+
             {!isCameraReady && (
               <div className="absolute inset-0 flex flex-col justify-center items-center bg-gray-100 z-30">
                 <div className="w-16 h-16 border-4 border-maroon border-t-transparent rounded-full animate-spin" />
@@ -368,11 +385,11 @@ const Capture = () => {
               )}
             </div>
 
-            {images.length >= totalPhoto ? (
+            {/* {images.length >= totalPhoto ? (
               <Button
                 asChild
                 onClick={handleNext}
-                className="w-14 h-14 rounded-2xl bg-green-500 hover:bg-green-600 text-white shadow-xl shadow-green-500/20 animate-bounce active:scale-95 transition-all"
+                className="w-14 h-14 rounded-2xl bg-green-500 hover:bg-green-600 text-white shadow-xl shadow-green-500/20 animate-bounce active:scale-95 transition"
               >
                 <Link to="/photostrip">
                   <ChevronRightIcon size={32} />
@@ -380,7 +397,7 @@ const Capture = () => {
               </Button>
             ) : (
               <div className="w-14 h-14" />
-            )}
+            )} */}
           </div>
         </div>
 
@@ -390,7 +407,7 @@ const Capture = () => {
           <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 space-y-6">
             <div className="flex justify-between items-center">
               <h3 className="text-gray-800 tracking-tight text-xl font-bold">
-                SESSION OPTIONS
+                Session Options
               </h3>
             </div>
 
@@ -435,8 +452,8 @@ const Capture = () => {
 
           {/* FILTER SETTINGS CARD */}
           <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 space-y-4">
-            <h3 className="font-black text-gray-800 tracking-tight text-xl flex items-center gap-2">
-              <Settings2Icon className="text-maroon" size={20} /> FILTERS
+            <h3 className="font-bold text-gray-800 tracking-tight text-xl flex items-center gap-2">
+              Filters Options
             </h3>
 
             <div className="flex gap-2">
@@ -582,8 +599,8 @@ const Capture = () => {
           {/* FILM STRIP GALLERY */}
           <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100 flex flex-col gap-4 flex-1">
             <div className="flex justify-between items-center mb-2">
-              <h3 className="font-black text-gray-800 tracking-tight flex items-center gap-2">
-                <SparklesIcon size={18} className="text-maroon" /> GALLERY
+              <h3 className="font-bold text-gray-800 tracking-tight flex items-center gap-2 text-xl">
+                Gallery
               </h3>
               <span className="text-[10px] font-bold px-2 py-1 bg-maroon/10 text-maroon rounded-lg">
                 {images.length} / {totalPhoto}
